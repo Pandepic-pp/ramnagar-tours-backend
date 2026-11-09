@@ -33,6 +33,11 @@ const env = {
   twoFactorApiKey: isProduction ? required('TWO_FACTOR_API_KEY') : (process.env.TWO_FACTOR_API_KEY?.trim() ?? ''),
   twoFactorTemplate: process.env.TWO_FACTOR_TEMPLATE?.trim() ?? '',
   demoOtp,
+  // Hops of proxies in front of the app. 1 = just the host's load balancer (Render). 2 = Vercel proxying /api to Render.
+  // Wrong value makes every visitor share one IP, which would trip the per-IP rate limits for everyone.
+  trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 1),
+  // Public URL the health monitor pings. Render sets RENDER_EXTERNAL_URL itself. Blank = ping localhost.
+  healthCheckUrl: (process.env.HEALTH_CHECK_URL ?? process.env.RENDER_EXTERNAL_URL ?? '').trim().replace(/\/$/, ''),
 };
 
 export default env;

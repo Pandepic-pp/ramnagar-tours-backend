@@ -61,7 +61,7 @@ PATCH /api/bookings/:id/cancel      Auth — cancel my open booking
 GET   /api/admin/bookings           Admin — open bookings (?status=requested|assigned|completed|cancelled|all), open work soonest first, history newest first
 PATCH /api/admin/bookings/:id/complete Admin — assigned → completed
 PATCH /api/admin/bookings/:id/assign Admin — { driverName, driverPhone, vehicleModel, vehicleNumber } → status "assigned"
-GET  /health                → { status: "ok" }
+GET  /health, /api/health   → { status: "ok"|"degraded", db, uptimeSec, timestamp } (503 if the DB does not answer). Registered before the rate limiter so host probes are never throttled.
 ```
 
 ## Key Decisions
@@ -73,6 +73,9 @@ GET  /health                → { status: "ok" }
 - **Admins are made by hand** — set `role: 'admin'` on the user document in MongoDB. There is deliberately no endpoint to become admin. The dispatch UI is in `../client` (/admin).
 - **Soft deletes** — `isActive: false`; disabled users are refused at login and by `verifyToken`.
 - **2Factor URL contains the API key** — never log the request URL or fetch errors (see `sms.service.ts`).
+
+## Health monitor
+`healthMonitor.service.ts` calls our own public `/health` on start and every 10 minutes and logs `[health] <India time> | OK | HTTP 200 | db: connected | N ms` (errors go to stderr). Hitting the public URL keeps a free Render instance from idling out while it is awake. It cannot wake an instance that has already spun down.
 
 ## Pricing (pricing.service.ts, rates in config/catalog.ts)
 Whole rupees, every line rounded as created so lines sum to the total. One way: max(distance, 80 km; 30 km if within 40 km) × one-way rate, vehicle minimum fare.
@@ -91,7 +94,9 @@ GST 5% on fare + extras, then round to the nearest ₹10. Road distance is curat
 | `JWT_EXPIRES_IN_DAYS` | Session lifetime, default 30 |
 | `ALLOWED_ORIGINS` | Comma-separated frontend origins (no `*` — credentials are on) |
 | `DEMO_OTP` | Dev only: fixed 6-digit OTP, no SMS sent. Blank = real OTPs. Refused in production. |
-| `PORT` | Default 5100 |
+| `TRUST_PROXY_HOPS` | Proxies in front of the app (production). 1 = Render only, 2 = Vercel proxying /api to Render. Wrong value = everyone shares one IP for rate limits. |
+| `HEALTH_CHECK_URL` | Public URL the 10-minute health monitor pings. Falls back to Render's `RENDER_EXTERNAL_URL`, then localhost. |
+| `PORT` | Default 5100 (Render sets its own) |
 
 ## Running
 ```bash

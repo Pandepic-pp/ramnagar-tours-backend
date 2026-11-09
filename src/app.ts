@@ -8,14 +8,21 @@ import rateLimit from 'express-rate-limit';
 import env from './config/env.js';
 import routes from './routes/index.js';
 import errorHandler from './middleware/errorHandler.js';
+import { health } from './controllers/health.controller.js';
 
 const app = express();
 
 // Behind nginx in production — without this every client appears to share the proxy's IP,
 // which would make the per-IP rate limits useless
-app.set('trust proxy', env.isProduction ? 1 : false);
+app.set('trust proxy', env.isProduction ? env.trustProxyHops : false);
 
 app.use(helmet());
+
+// Registered before the rate limiter on purpose: a host's own health probe polls this every few seconds and
+// must never be throttled, or the platform would mark the service unhealthy.
+// /api/health is the same check, reachable through a proxy that only forwards /api (e.g. Vercel rewrites).
+app.get('/health', health);
+app.get('/api/health', health);
 
 app.use(cors({
   origin: env.allowedOrigins,
@@ -36,10 +43,6 @@ if (env.nodeEnv !== 'test') {
 
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
-
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
 
 app.use('/api', routes);
 
